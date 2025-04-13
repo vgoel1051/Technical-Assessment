@@ -1,0 +1,10 @@
+# Dockerfile.ecs
+FROM openjdk:17-jdk-slim
+
+# Copy built JAR from Maven build
+COPY target/my-java-app-1.0-SNAPSHOT.jar /usr/app/my-java-app.jar
+
+WORKDIR /usr/app
+
+# Run Java application
+CMD ["java", "-jar", "my-java-app.jar"]

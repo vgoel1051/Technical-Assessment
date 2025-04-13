@@ -1,0 +1,9 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: my-lambda-function
+      PackageType: Image
+      ImageUri: "359986337062.dkr.ecr.ap-south-1.amazonaws.com/my-tomcat-repo:latest" 
+      Role: arn:aws:iam::359986337062:role/Vishaltask 

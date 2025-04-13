@@ -1,0 +1,8 @@
+# Dockerfile.lambda
+FROM public.ecr.aws/lambda/java:17
+
+# Copy the Maven-built JAR into Lambda's expected directory
+COPY target/my-java-app-1.0-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
+
+# Define the Lambda handler
+CMD ["app.jar"]

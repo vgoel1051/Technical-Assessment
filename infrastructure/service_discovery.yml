@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS microservice with Cloud Map service discovery
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+  ECSClusterName:
+    Type: String
+  ServiceNamespaceId:
+    Type: String
+    Description: Cloud Map namespace ID
+  MicroserviceName:
+    Type: String
+    Default: java-service
+  ContainerPort:
+    Type: Number
+    Default: 8080
+  ContainerImage:
+    Type: String
+    Default: public.ecr.aws/sample/java-service:latest
+
+Resources:
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${MicroserviceName}"
+      RetentionInDays: 7
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities: [FARGATE]
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Ref MicroserviceName
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: ecs
+
+  CloudMapService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: !Ref MicroserviceName
+      NamespaceId: !Ref ServiceNamespaceId
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+        RoutingPolicy: MULTIVALUE
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: CloudMapService
+    Properties:
+      ServiceName: !Ref MicroserviceName
+      Cluster: !Ref ECSClusterName
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: [!Ref PrivateSubnet1]
+          AssignPublicIp: ENABLED  
+      TaskDefinition: !Ref TaskDefinition
+      ServiceRegistries:
+        - RegistryArn: !GetAtt CloudMapService.Arn
+
+Outputs:
+  ECSServiceName:
+    Value: !Ref ECSService
+  CloudMapServiceName:
+    Value: !Ref CloudMapService
+  TaskDefinitionArn:
+    Value: !Ref TaskDefinition

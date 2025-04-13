@@ -1,0 +1,47 @@
+image: maven:3.8.1-jdk-17
+
+stages:
+  - build
+  - docker-build
+  - deploy-lambda
+  - deploy-ecs
+
+variables:
+  AWS_DEFAULT_REGION: "ap-south-1"
+  ECS_IMAGE_REPO: "359986337062.dkr.ecr.ap-south-1.amazonaws.com/my-ecs-repo"
+  LAMBDA_IMAGE_REPO: "359986337062.dkr.ecr.ap-south-1.amazonaws.com/my-lambda-repo"
+
+before_script:
+  - apt-get update && apt-get install -y awscli docker.io
+  - $(aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin 359986337062.dkr.ecr.ap-south-1.amazonaws.com)
+
+build-java:
+  stage: build
+  script:
+    - mvn clean package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+
+build-docker-ecs:
+  stage: docker-build
+  script:
+    - docker build -f Dockerfile.ecs -t $ECS_IMAGE_REPO:latest .
+    - docker push $ECS_IMAGE_REPO:latest
+
+build-docker-lambda:
+  stage: docker-build
+  script:
+    - docker build -f Dockerfile.lambda -t $LAMBDA_IMAGE_REPO:latest .
+    - docker push $LAMBDA_IMAGE_REPO:latest
+
+deploy-lambda:
+  stage: deploy-lambda
+  script:
+    - aws cloudformation package --template-file template.yaml --s3-bucket task-sam-s3-bucket --output-template-file packaged.yaml
+    - aws cloudformation deploy --template-file packaged.yaml --stack-name lambda-java-app --capabilities CAPABILITY_IAM
+
+deploy-ecs:
+  stage: deploy-ecs
+  script:
+    - aws ecs update-service --cluster task-ecs-cluster --service task-ecs-service --force-new-deployment
